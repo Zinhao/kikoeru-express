@@ -12,6 +12,7 @@ const { nameToUUID } = require('../scraper/utils');
 
 const { config } = require('../config');
 const { updateLock } = require('../upgrade');
+const { formatID } = require('./utils');
 
 // 只有在子进程中 process 对象才有 send() 方法
 process.send = process.send || function () {};
@@ -97,7 +98,7 @@ const emitTaskLog = (message, rjcode, level = 'info', truncate = 15) => {
     level: level,
     message: message.substring(truncate)
   });
-}
+};
 
 process.on('message', (m) => {
   if (m.emit === 'SCAN_INIT_STATE') {
@@ -124,7 +125,7 @@ process.on('message', (m) => {
 
 /**
  * 通过数组 arr 中每个对象的 id 属性来对数组去重
- * @param {Array} arr 
+ * @param {Array} arr
  */
 const uniqueArr = (arr) => {
   const uniqueArr = [];
@@ -156,13 +157,13 @@ const uniqueArr = (arr) => {
  * @param {string} tagLanguage 标签语言，'ja-jp', 'zh-tw' or 'zh-cn'，默认'zh-cn'
  */
 const getMetadata = (id, rootFolderName, dir, tagLanguage) => {
-  const rjcode = (`000000${id}`).slice(-6); // zero-pad to 6 digits
+  const rjcode = formatID(id); // zero-pad to 6 digits
   console.log(` -> [RJ${rjcode}] 从 DLSite 抓取元数据...`);
   addLogForTask(rjcode, {
     level: 'info',
     message: '从 DLSite 抓取元数据...'
   });
-  
+
   return scrapeWorkMetadataFromDLsite(id, tagLanguage) // 抓取该音声的元数据
     .then((metadata) => {
       // 将抓取到的元数据插入到数据库
@@ -171,7 +172,7 @@ const getMetadata = (id, rootFolderName, dir, tagLanguage) => {
         level: 'info',
         message: '元数据抓取成功，准备添加到数据库...'
       });
-      
+
       metadata.rootFolderName = rootFolderName;
       metadata.dir = dir;
       return db.insertWorkMetadata(metadata)
@@ -181,7 +182,7 @@ const getMetadata = (id, rootFolderName, dir, tagLanguage) => {
             level: 'info',
             message: '元数据成功添加到数据库.'
           });
-          
+
           return 'added';
         })
         .catch((err) => {
@@ -190,7 +191,7 @@ const getMetadata = (id, rootFolderName, dir, tagLanguage) => {
             level: 'error',
             message: `在插入元数据过程中出错: ${err.message}`
           });
-          
+
           return 'failed';
         });
     })
@@ -200,7 +201,7 @@ const getMetadata = (id, rootFolderName, dir, tagLanguage) => {
         level: 'error',
         message: `在抓取元数据过程中出错: ${err.message}`
       });
-      
+
       return 'failed';
     });
 };
@@ -212,9 +213,9 @@ const getMetadata = (id, rootFolderName, dir, tagLanguage) => {
  * @param {Array} types img types: ['main', 'sam', 'sam@2x', 'sam@3x', '240x240', '360x360']
  */
 const getCoverImage = (id, types) => {
-  const rjcode = (`000000${id}`).slice(-6); // zero-pad to 6 digits
+  const rjcode = formatID(id); // zero-pad to 6 digits
   const id2 = (id % 1000 === 0) ? id : parseInt(id / 1000) * 1000 + 1000;
-  const rjcode2 = (`000000${id2}`).slice(-6); // zero-pad to 6 digits
+  const rjcode2 = formatID(id2); // zero-pad to 6 digits
   const promises = [];
   types.forEach(type => {
     let url = `https://img.dlsite.jp/modpub/images2/work/doujin/RJ${rjcode2}/RJ${rjcode}_img_${type}.jpg`;
@@ -241,7 +242,7 @@ const getCoverImage = (id, types) => {
             level: 'error',
             message: `在下载封面 RJ${rjcode}_img_${type}.jpg 过程中出错: ${err.message}`
           });
-          
+
           return 'failed';
         })
     );
@@ -252,7 +253,7 @@ const getCoverImage = (id, types) => {
     level: 'info',
     message: `从 DLsite 下载封面...`
   });
-  
+
   return Promise.all(promises)
     .then((results) => {
       results.forEach(result => {
@@ -276,7 +277,7 @@ const processFolder = (folder) => db.knex('t_work')
   .count()
   .first()
   .then((res) => {
-    const rjcode = (`000000${folder.id}`).slice(-6); // zero-pad to 6 digits
+    const rjcode = formatID(folder.id); // zero-pad to 6 digits
     const coverTypes = ['main', 'sam', '240x240'];
     const count = res['count(*)'];
     if (count) { // 查询数据库，检查是否已经写入该音声的元数据
@@ -289,7 +290,7 @@ const processFolder = (folder) => db.knex('t_work')
           lostCoverTypes.push(type);
         }
       });
-      
+
       if (lostCoverTypes.length) {
         console.log(`  ! [RJ${rjcode}] 封面图片缺失，重新下载封面图片...`);
         addTask(rjcode);
@@ -309,7 +310,7 @@ const processFolder = (folder) => db.knex('t_work')
         level: 'info',
         message: `发现新文件夹: "${folder.absolutePath}"`
       });
-      
+
       return getMetadata(folder.id, folder.rootFolderName, folder.relativePath, config.tagLanguage) // 获取元数据
         .then((result) => {
           if (result === 'failed') { // 如果获取元数据失败，跳过封面图片下载
@@ -344,10 +345,10 @@ const performCleanup = async () => {
     if (!rootFolder || !fs.existsSync(path.join(rootFolder.path, work.dir))) {
       db.removeWork(work.id, trxProvider) // 将其数据项从数据库中移除
         .then((result) => { // 然后删除其封面图片
-          const rjcode = (`000000${work.id}`).slice(-6); // zero-pad to 6 digits
-          deleteCoverImageFromDisk(rjcode)    
+          const rjcode = formatID(work.id); // zero-pad to 6 digits
+          deleteCoverImageFromDisk(rjcode)
             .catch((err) => {
-              if (err && err.code !== 'ENOENT') { 
+              if (err && err.code !== 'ENOENT') {
                 console.error(`  ! [RJ${rjcode}] 在删除封面过程中出错: ${err.message}`);
                 addMainLog({
                   level: 'error',
@@ -439,9 +440,9 @@ const performScan = () => {
             level: 'info',
             message: '清理本地不再存在的音声的数据与封面图片...'
           });
-  
+
           await performCleanup();
-  
+
           console.log(' * 清理完成. 现在开始扫描...');
           addMainLog({
             level: 'info',
@@ -453,7 +454,7 @@ const performScan = () => {
             level: 'error',
             message: `在执行清理过程中出错: ${err.message}`
           });
-  
+
           process.exit(1);
         }
       }
@@ -484,7 +485,7 @@ const performScan = () => {
       try {
         // 去重，避免在之后的并行处理文件夹过程中，出现对数据库同时写入同一条记录的错误
         const uniqueFolderList = uniqueArr(folderList).uniqueArr;
-        const duplicate = uniqueArr(folderList).duplicate
+        const duplicate = uniqueArr(folderList).duplicate;
         const duplicateNum = folderList.length - uniqueFolderList.length;
 
         if (duplicateNum) {
@@ -493,12 +494,12 @@ const performScan = () => {
             level: 'info',
             message: `发现 ${duplicateNum} 个重复的音声文件夹.`
           });
-          
+
           for (const key in duplicate) {
             const addedFolder = uniqueFolderList.find(folder => folder.id === parseInt(key));
             duplicate[key].push(addedFolder); // 最后一项为将要添加到数据库中的音声文件夹
 
-            const rjcode = (`000000${key}`).slice(-6); // zero-pad to 6 digits
+            const rjcode = formatID(key); // zero-pad to 6 digits
             console.log(` -> [RJ${rjcode}] 存在多个文件夹:`);
             addMainLog({
               level: 'info',
@@ -520,10 +521,10 @@ const performScan = () => {
 
         counts['skipped'] += duplicateNum;
 
-        const promises = uniqueFolderList.map((folder) => 
+        const promises = uniqueFolderList.map((folder) =>
           processFolderLimited(folder)
             .then((result) => { // 统计处理结果
-              const rjcode = (`000000${folder.id}`).slice(-6); // zero-pad to 6 digits\
+              const rjcode = formatID(folder.id); // zero-pad to 6 digits\
               counts[result] += 1;
 
               if (result === 'added') {
@@ -559,7 +560,7 @@ const performScan = () => {
               message: message
             }
           });
-          
+
           db.knex.destroy();
           if (fixVAFailed) {
             process.exit(1);
@@ -599,7 +600,7 @@ const updateMetadata = (id, options = {}) => {
     scrapeProcessor = () => scrapeWorkMetadataFromDLsite(id, config.tagLanguage);
   }
 
-  const rjcode = (`000000${id}`).slice(-6); // zero-pad to 6 digits
+  const rjcode = formatID(id); // zero-pad to 6 digits
   addTask(rjcode); // addTask only accepts a string
   return scrapeProcessor() // 抓取该音声的元数据
     .then((metadata) => {
@@ -658,11 +659,11 @@ const refreshWorks = async (query, idColumnName, processor) => {
     const counts = {
       updated: 0,
       failed: 0,
-    }; 
+    };
 
     const promises = works.map((work) => {
       const workid = work[idColumnName];
-      const rjcode = (`000000${workid}`).slice(-6);
+      const rjcode = formatID(workid);
       return processor(workid)
         .then((result) => { // 统计处理结果
           result === 'failed' ? counts['failed'] += 1 : counts['updated'] += 1;
@@ -673,7 +674,7 @@ const refreshWorks = async (query, idColumnName, processor) => {
           } else {
             addResult(rjcode, 'updated', counts.updated);
           }
-      })
+      });
     });
     await Promise.all(promises);
     emitMainLog(` * 完成元数据更新 ${counts.updated} 个，失败 ${counts.failed} 个.`);
@@ -682,4 +683,4 @@ const refreshWorks = async (query, idColumnName, processor) => {
   });
 };
 
-module.exports = { performScan, performUpdate }
+module.exports = { performScan, performUpdate };

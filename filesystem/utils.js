@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const recursiveReaddir = require('recursive-readdir');
 const { orderBy } = require('natural-orderby');
-const { joinFragments } = require('../routes/utils/url')
+const { joinFragments } = require('../routes/utils/url');
 const { config } = require('../config');
 
 /**
@@ -18,7 +18,7 @@ const getTrackList = (id, dir) => recursiveReaddir(dir)
       const ext = path.extname(file);
 
       return (ext === '.mp3' || ext === '.ogg' || ext === '.opus' || ext === '.wav' || ext === '.aac'
-        || ext === '.flac' || ext === '.webm' || ext === '.mp4'|| ext === '.m4a' 
+        || ext === '.flac' || ext === '.webm' || ext === '.mp4'|| ext === '.m4a'
         || ext === '.txt' || ext === '.lrc' || ext === '.srt' || ext === '.ass'
         || ext === '.pdf'
         || ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.webp');
@@ -52,8 +52,8 @@ const getTrackList = (id, dir) => recursiveReaddir(dir)
 
 /**
  * 转换成树状结构
- * @param {Array} tracks 
- * @param {String} workTitle 
+ * @param {Array} tracks
+ * @param {String} workTitle
  */
 const toTree = (tracks, workTitle, workDir, rootFolder) => {
   const tree = [];
@@ -97,10 +97,10 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
       offloadStreamUrl = offloadStreamUrl.replace(/\\/g, '/');
       offloadDownloadUrl = offloadDownloadUrl.replace(/\\/g, '/');
     }
-  
-    const textBaseUrl = '/api/media/stream/'
-    const mediaStreamBaseUrl = '/api/media/stream/'
-    const mediaDownloadBaseUrl = '/api/media/download/'
+
+    const textBaseUrl = '/api/media/stream/';
+    const mediaStreamBaseUrl = '/api/media/stream/';
+    const mediaDownloadBaseUrl = '/api/media/download/';
     const textStreamBaseUrl = textBaseUrl + track.hash;    // Handle charset detection internally with jschardet
     const textDownloadBaseUrl = config.offloadMedia ? offloadDownloadUrl : mediaDownloadBaseUrl + track.hash;
     const mediaStreamUrl = config.offloadMedia ? offloadStreamUrl : mediaStreamBaseUrl + track.hash;
@@ -155,7 +155,7 @@ const toTree = (tracks, workTitle, workDir, rootFolder) => {
  */
 async function* getFolderList(rootFolder, current = '', depth = 0, callback = function addMainLog(){} ) { // 异步生成器函数 async function*() {}
   // 浅层遍历
-  const folders = await fs.promises.readdir(path.join(rootFolder.path, current));    
+  const folders = await fs.promises.readdir(path.join(rootFolder.path, current));
 
   for (const folder of folders) {
     const absolutePath = path.resolve(rootFolder.path, current, folder);
@@ -164,9 +164,9 @@ async function* getFolderList(rootFolder, current = '', depth = 0, callback = fu
     try {
     // eslint-disable-next-line no-await-in-loop
       if ((await fs.promises.stat(absolutePath)).isDirectory()) { // 检查是否为文件夹
-          if (folder.match(/RJ\d{6}/)) { // 检查文件夹名称中是否含有RJ号
+          if (folder.match(/RJ\d+/)) { // 检查文件夹名称中是否含有RJ号
             // Found a work folder, don't go any deeper.
-            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: parseInt(folder.match(/RJ(\d{6})/)[1]) };
+            yield { absolutePath, relativePath, rootFolderName: rootFolder.name, id: parseInt(folder.match(/RJ(\d+)/)[1]) };
           } else if (depth + 1 < config.scannerMaxRecursionDepth) {
             // 若文件夹名称中不含有RJ号，就进入该文件夹内部
             // Found a folder that's not a work folder, go inside if allowed.
@@ -176,14 +176,14 @@ async function* getFolderList(rootFolder, current = '', depth = 0, callback = fu
     } catch (err) {
       if (err.code === 'EPERM') {
         if (err.path && !err.path.endsWith('System Volume Information')) {
-          console.log(' ! 无法访问', err.path)
+          console.log(' ! 无法访问', err.path);
           callback({
             level: 'info',
             message: ` ! 无法访问 ${err.path}`
-          })
+          });
         }
       } else {
-        throw err
+        throw err;
       }
     }
   }
@@ -225,11 +225,29 @@ const saveCoverImageToDisk = (stream, rjcode, type) => new Promise((resolve, rej
 });
 
 
+/**
+ * 格式化 id，适配 8 位、6 位 id
+ * @param {number} id
+ * @return {string}
+ */
+
+function formatID(id) {
+  if (id >= 1000000) {
+    // 大于 7 位数，则补全为 8 位
+    id = `0${id}`.slice(-8);
+  } else {
+    // 否则补全为 6 位
+    id = `000000${id}`.slice(-6);
+  }
+
+  return id;
+}
+
 module.exports = {
   getTrackList,
   toTree,
   getFolderList,
   deleteCoverImageFromDisk,
   saveCoverImageToDisk,
+  formatID,
 };
-
