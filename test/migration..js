@@ -27,7 +27,7 @@ describe('Database', function() {
   it('v0.3.0 should work', async function() {
     const result = await db.raw(`pragma table_info('t_va')`);
     // t_va id column type was integer in 0.3.0
-    expect(result[0]['type']).to.equal('integer');
+    assert.strictEqual(String(column.type).toLowerCase(), 'integer')
   })
 
   it('should be able to migrate to latest', async function() {
@@ -77,7 +77,7 @@ describe('Database v0.6.0-rc4', function() {
   it('should work', async function() {
     const result = await db.raw(`pragma table_info('t_va')`);
     // t_va id column type has changed to text in v0.6.0-rc4
-    expect(result[0]['type']).to.equal('varchar(255)');
+   assert.strictEqual(column.type.toLowerCase(), 'varchar(255)');
   })
 
   it('should be able to migrate to 20210502081522_remove_obsolete_view', async function() {
